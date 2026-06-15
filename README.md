@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛡️ Code Guardian — AI Security Review Agent
 
-## Getting Started
+> **NeuroX Hackathon 2026 | ArmorIQ Track 2: AI Agent for the Real World**
 
-First, run the development server:
+AI-powered code security scanner that finds vulnerabilities, explains them in plain English using real LLM analysis, auto-triages with policy-gated decisions, and logs everything via ArmorIQ SDK.
+
+## 🔥 What It Does
+
+1. **Paste your code** → real-time static analysis with 15 vulnerability detection patterns
+2. **AI explains** → each finding sent to LLM (Gemini 2.5 Flash via OpenRouter) for context-aware explanation mentioning actual variable names, line numbers
+3. **Agent triages** → severity-based auto-triage (block/flag/approve) with policy-backed reasoning
+4. **ArmorIQ logs** → plan capture + intent token issuance via `@armoriq/sdk` for cryptographic audit trail
+
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16, React, TypeScript |
+| Styling | Tailwind CSS + Custom CSS (Glassmorphism, Animations) |
+| AI/LLM | Google Gemini 2.5 Flash via OpenRouter API |
+| Security SDK | ArmorIQ TypeScript SDK (`@armoriq/sdk`) |
+| Scanner | Custom regex-based static analysis engine |
+| Deployment | Vercel |
+
+## 🚀 Quick Start
 
 ```bash
+# Clone
+git clone <repo-url>
+cd code-guardian
+
+# Install
+npm install
+
+# Set up environment
+cp .env.example .env.local
+# Edit .env.local with your API keys
+
+# Run
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🔑 Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Description | Get it from |
+|----------|-------------|-------------|
+| `OPENROUTER_API_KEY` | LLM API key for AI explanations | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `ARMORIQ_API_KEY` | ArmorIQ SDK key for audit + policy | [platform.armoriq.ai](https://platform.armoriq.ai) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📁 Project Structure
 
-## Learn More
+```
+src/
+├── app/
+│   ├── api/scan/route.ts    # API: scanner + LLM + ArmorIQ pipeline
+│   ├── layout.tsx           # Root layout
+│   ├── page.tsx             # Main dashboard
+│   └── globals.css          # Design system
+├── components/
+│   ├── Navbar.tsx           # Top navigation
+│   ├── StatsPanel.tsx       # Security score + severity breakdown
+│   ├── FindingsPanel.tsx    # Expandable vulnerability cards
+│   ├── AuditLog.tsx         # ArmorIQ audit trail viewer
+│   └── ScanAnimation.tsx    # Scanning state animation
+└── lib/
+    ├── scanner.ts           # Static analysis engine (15 vuln patterns)
+    ├── llm.ts               # OpenRouter LLM integration
+    ├── armoriq.ts           # ArmorIQ SDK integration
+    ├── types.ts             # TypeScript types
+    └── demo-code.ts         # Demo vulnerable code samples
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 🔍 Vulnerability Patterns Detected
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- SQL Injection (CWE-89)
+- Cross-Site Scripting / XSS (CWE-79)
+- Hardcoded Secrets / API Keys (CWE-798)
+- OS Command Injection (CWE-78)
+- Path Traversal (CWE-22)
+- Insecure Deserialization (CWE-502)
+- Weak Cryptography (CWE-327)
+- CORS Misconfiguration (CWE-942)
+- Missing Authentication (CWE-306)
+- SSRF (CWE-918)
+- JWT Verification Bypass (CWE-347)
+- Debug Mode / Sensitive Logging (CWE-215)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🌐 Deploy to Vercel
 
-## Deploy on Vercel
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Push to GitHub
+2. Import in Vercel
+3. Add environment variables (`OPENROUTER_API_KEY`, `ARMORIQ_API_KEY`)
+4. Deploy
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 👥 Team
+
+**Code Guardian Team** — NeuroX Hackathon 2026
