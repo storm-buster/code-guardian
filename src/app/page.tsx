@@ -1,13 +1,45 @@
 "use client";
 import { useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import StatsPanel from "@/components/StatsPanel";
 import FindingsPanel from "@/components/FindingsPanel";
 import ScanAnimation from "@/components/ScanAnimation";
 import AuditLog from "@/components/AuditLog";
+import RepoPicker from "@/components/RepoPicker";
 import { ScanResult, Finding } from "@/lib/types";
 
+interface ScanContext {
+  owner: string;
+  repo: string;
+  filePath: string;
+  defaultBranch: string;
+  fileSha: string;
+  fullFileContent: string;
+}
+
+interface ActionResult {
+  findingId: string;
+  type: "block" | "flag" | "approve";
+  issueUrl?: string;
+  issueNumber?: number;
+  prUrl?: string;
+  prNumber?: number;
+  branchName?: string;
+  error?: string;
+}
+
+function slugify(filePath: string): string {
+  const name = filePath.split("/").pop() || filePath;
+  return name.toLowerCase().replace(/[.\s/]/g, "-");
+}
+
+function isValidBranch(name: string): boolean {
+  return name.length > 0 && !/[\s~^:?*\[\]\\]/.test(name);
+}
+
 export default function Home() {
+  const { data: session } = useSession();
   const [result, setResult] = useState<ScanResult | null>(null);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -20,6 +52,13 @@ export default function Home() {
   const [ghInfo, setGhInfo] = useState("");
   const [scanFilenames, setScanFilenames] = useState<string[]>([]);
   const [mobileDetail, setMobileDetail] = useState(false);
+  const [scanCtx, setScanCtx] = useState<ScanContext | null>(null);
+
+  // Triage action state
+  const [actionResults, setActionResults] = useState<Map<string, ActionResult>>(new Map());
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [approveMode, setApproveMode] = useState<string | null>(null); // findingId
+  const [branchName, setBranchName] = useState("");
 
   const doScan = useCallback(async (c: string, language: string, filename?: string) => {
     if (!c.trim()) return;
@@ -27,6 +66,8 @@ export default function Home() {
     setScanning(true);
     setResult(null);
     setSelected(null);
+    setActionResults(new Map());
+    setApproveMode(null);
     try {
       const res = await fetch("/api/scan", {
         method: "POST",
@@ -62,9 +103,109 @@ export default function Home() {
     finally { setGhFetching(false); }
   };
 
+  const handleRepoScan = (ctx: {
+    owner: string; repo: string; filePath: string;
+    defaultBranch: string; fileSha: string; fileContent: string;
+  }) => {
+    setScanCtx({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      filePath: ctx.filePath,
+      defaultBranch: ctx.defaultBranch,
+      fileSha: ctx.fileSha,
+      fullFileContent: ctx.fileContent,
+    });
+    setScanFilenames([ctx.filePath]);
+    const ext = ctx.filePath.split(".").pop()?.toLowerCase() || "";
+    const langMap: Record<string, string> = { py: "python", js: "javascript", ts: "typescript", tsx: "typescript", jsx: "javascript", go: "go", java: "java", rb: "ruby", php: "php", rs: "rust" };
+    doScan(ctx.fileContent, langMap[ext] || "python", ctx.filePath);
+  };
+
+  const resetToRepoPicker = () => {
+    setResult(null);
+    setSelected(null);
+    setScanCtx(null);
+    setActionResults(new Map());
+    setApproveMode(null);
+  };
+
+  // --- Triage actions ---
+  const doBlock = async (finding: Finding) => {
+    if (!scanCtx) return;
+    setActionLoading(finding.id);
+    try {
+      const res = await fetch("/api/github/actions/block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner: scanCtx.owner, repo: scanCtx.repo, filePath: scanCtx.filePath,
+          finding, policyId: decision(finding.id)?.policyRef || "POL-SEC-001",
+        }),
+      });
+      const data = await res.json();
+      setActionResults(prev => new Map(prev).set(finding.id, {
+        findingId: finding.id, type: "block",
+        ...(data.error ? { error: data.error } : { issueUrl: data.issueUrl, issueNumber: data.issueNumber }),
+      }));
+    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "block", error: "action failed: network error" })); }
+    finally { setActionLoading(null); }
+  };
+
+  const doFlag = async (finding: Finding) => {
+    if (!scanCtx) return;
+    setActionLoading(finding.id);
+    try {
+      const res = await fetch("/api/github/actions/flag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner: scanCtx.owner, repo: scanCtx.repo, filePath: scanCtx.filePath,
+          finding, policyId: decision(finding.id)?.policyRef || "POL-REV-002",
+        }),
+      });
+      const data = await res.json();
+      setActionResults(prev => new Map(prev).set(finding.id, {
+        findingId: finding.id, type: "flag",
+        ...(data.error ? { error: data.error } : { issueUrl: data.issueUrl, issueNumber: data.issueNumber }),
+      }));
+    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "flag", error: "action failed: network error" })); }
+    finally { setActionLoading(null); }
+  };
+
+  const startApprove = (finding: Finding) => {
+    const cwe = finding.cwe?.replace("CWE-", "") || "unknown";
+    const slug = slugify(finding.file);
+    setBranchName(`code-guardian/fix-cwe-${cwe}-${slug}`);
+    setApproveMode(finding.id);
+  };
+
+  const doApprove = async (finding: Finding) => {
+    if (!scanCtx || !branchName) return;
+    setActionLoading(finding.id);
+    try {
+      const res = await fetch("/api/github/actions/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner: scanCtx.owner, repo: scanCtx.repo, filePath: scanCtx.filePath,
+          fileSha: scanCtx.fileSha, defaultBranch: scanCtx.defaultBranch,
+          branchName, finding, suggestedFix: finding.ai_fix || "",
+          fullFileContent: scanCtx.fullFileContent,
+          policyId: decision(finding.id)?.policyRef || "POL-LOW-003",
+        }),
+      });
+      const data = await res.json();
+      setActionResults(prev => new Map(prev).set(finding.id, {
+        findingId: finding.id, type: "approve",
+        ...(data.error ? { error: data.error } : { prUrl: data.prUrl, prNumber: data.prNumber, branchName: data.branchName }),
+      }));
+      setApproveMode(null);
+    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "approve", error: "fix failed: network error" })); }
+    finally { setActionLoading(null); }
+  };
+
   const decision = (fId: string) => result?.decisions.find(d => d.findingId === fId);
 
-  // Parse code snippet into lines with line numbers
   const parseSnippet = (snippet: string, vulnLine: number) => {
     return snippet.split("\n").map(raw => {
       const m = raw.match(/^(\d+)\s*\|\s?(.*)/);
@@ -74,7 +215,6 @@ export default function Home() {
     });
   };
 
-  // Render AI text with inline code
   const renderAI = (text: string) => {
     const parts = text.split(/`([^`]+)`/g);
     return parts.map((p, i) =>
@@ -82,39 +222,188 @@ export default function Home() {
     );
   };
 
+  const hasGhActions = !!scanCtx && !!session?.accessToken;
+  const branchValid = isValidBranch(branchName);
+
+  // --- Render triage section for selected finding ---
+  const renderTriage = (finding: Finding) => {
+    const ar = actionResults.get(finding.id);
+    const isLoading = actionLoading === finding.id;
+
+    // Action completed
+    if (ar && !ar.error) {
+      if (ar.type === "block") return (
+        <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginTop: 20 }}>
+          issue opened · #{ar.issueNumber} ·{" "}
+          <a href={ar.issueUrl} target="_blank" rel="noreferrer"
+            style={{ color: "var(--cg-muted)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+          >view →</a>
+        </div>
+      );
+      if (ar.type === "flag") return (
+        <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginTop: 20 }}>
+          flagged for review · #{ar.issueNumber} ·{" "}
+          <a href={ar.issueUrl} target="_blank" rel="noreferrer"
+            style={{ color: "var(--cg-muted)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+          >view →</a>
+        </div>
+      );
+      if (ar.type === "approve") return (
+        <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginTop: 20 }}>
+          PR #{ar.prNumber} opened · <code className="ic">{ar.branchName}</code> ·{" "}
+          <a href={ar.prUrl} target="_blank" rel="noreferrer"
+            style={{ color: "var(--cg-muted)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+          >view PR →</a>
+        </div>
+      );
+    }
+
+    // Action failed
+    if (ar?.error) return (
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: ar.type === "approve" ? "var(--sev-critical)" : "var(--cg-muted)" }}>
+          {ar.error}
+          {" · "}
+          <span
+            onClick={() => { setActionResults(prev => { const m = new Map(prev); m.delete(finding.id); return m; }); if (ar.type === "approve") startApprove(finding); }}
+            style={{ cursor: "pointer", textDecoration: "underline" }}
+          >retry</span>
+        </div>
+      </div>
+    );
+
+    // Approve mode — branch name input
+    if (approveMode === finding.id) return (
+      <div style={{ marginTop: 20 }}>
+        <div className="sh" style={{ marginBottom: 6 }}>branch name</div>
+        <input
+          value={branchName}
+          onChange={e => setBranchName(e.target.value)}
+          style={{
+            width: "100%", background: "var(--cg-surface2)", border: "1px solid var(--cg-border2)",
+            borderRadius: 4, fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-text)",
+            padding: "6px 10px", outline: "none",
+          }}
+          onFocus={e => (e.currentTarget.style.borderColor = "#3A4260")}
+          onBlur={e => (e.currentTarget.style.borderColor = "var(--cg-border2)")}
+        />
+        {branchName && !branchValid && (
+          <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--sev-critical)", marginTop: 4 }}>
+            invalid branch name
+          </div>
+        )}
+        <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginTop: 4 }}>
+          will be created from <code className="ic">{scanCtx?.defaultBranch || "main"}</code>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <span
+            onClick={() => setApproveMode(null)}
+            style={{ fontSize: 12, color: "var(--cg-muted)", cursor: "pointer", padding: "5px 0" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+          >Cancel</span>
+          <button
+            onClick={() => doApprove(finding)}
+            disabled={!branchValid || isLoading}
+            style={{
+              border: "1px solid var(--cg-border2)", background: "transparent", color: "var(--cg-text)",
+              fontSize: 12, padding: "5px 12px", borderRadius: 4, cursor: !branchValid || isLoading ? "not-allowed" : "pointer",
+              fontFamily: "var(--font-ui)", opacity: !branchValid || isLoading ? 0.5 : 1,
+            }}
+            onMouseEnter={e => { if (branchValid && !isLoading) { e.currentTarget.style.borderColor = "#16A34A"; e.currentTarget.style.color = "#16A34A"; } }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--cg-border2)"; e.currentTarget.style.color = "var(--cg-text)"; }}
+          >
+            {isLoading ? "creating..." : "Create branch & open PR →"}
+          </button>
+        </div>
+      </div>
+    );
+
+    // Default buttons
+    return (
+      <div style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {hasGhActions ? (
+            <>
+              <button className={`tb block ${decision(finding.id)?.action === "block" ? "active" : ""}`}
+                onClick={() => doBlock(finding)} disabled={isLoading}>
+                {isLoading && actionLoading === finding.id ? "..." : "block"}
+              </button>
+              <button className={`tb flag ${decision(finding.id)?.action === "flag" ? "active" : ""}`}
+                onClick={() => doFlag(finding)} disabled={isLoading}>
+                flag
+              </button>
+              <button className={`tb approve ${decision(finding.id)?.action === "approve" ? "active" : ""}`}
+                onClick={() => startApprove(finding)} disabled={isLoading}>
+                approve
+              </button>
+            </>
+          ) : (
+            (["block", "flag", "approve"] as const).map(a => (
+              <button key={a} className={`tb ${a} ${decision(finding.id)?.action === a ? "active" : ""}`}>
+                {a}
+              </button>
+            ))
+          )}
+        </div>
+        {decision(finding.id)?.policyRef && (
+          <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginTop: 8 }}>
+            policy: {decision(finding.id)?.policyRef}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="app-layout">
       <Navbar onPaste={() => setShowPaste(true)} scanning={scanning} />
 
+      {/* Left panel — RepoPicker or StatsPanel */}
       <div className="stats-col">
-        <StatsPanel
-          stats={result?.stats || null}
-          filename={result ? scanFilenames[0] || "code" : undefined}
-        />
+        {result ? (
+          <>
+            {scanCtx && (
+              <div
+                onClick={resetToRepoPicker}
+                style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", cursor: "pointer", marginBottom: 8 }}
+                onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-dim)")}
+              >
+                ← change file
+              </div>
+            )}
+            <StatsPanel stats={result.stats} filename={scanFilenames[0] || "code"} />
+          </>
+        ) : (
+          <RepoPicker onScanFile={handleRepoScan} />
+        )}
       </div>
 
       <div className="main-col">
         <div className="content-split">
-          {/* Findings column */}
           <div className="findings-col">
             {scanning ? (
               <ScanAnimation filenames={scanFilenames} />
             ) : result ? (
-              <FindingsPanel findings={result.findings} selected={selected} onSelect={(f) => { setSelected(f); setMobileDetail(true); }} />
+              <FindingsPanel findings={result.findings} selected={selected} onSelect={(f) => { setSelected(f); setMobileDetail(true); setApproveMode(null); }} />
             ) : (
               <div className="empty-state">paste code above to begin</div>
             )}
           </div>
 
-          {/* Detail pane */}
           <div className={`detail-col${mobileDetail && selected ? " mobile-open" : ""}`}>
             {selected ? (
               <div>
-                {/* Mobile back button */}
                 <div className="mobile-only mobile-detail-back" onClick={() => setMobileDetail(false)}>
                   ← back to findings
                 </div>
-                {/* Header */}
                 <div style={{ fontSize: 11, fontFamily: "var(--font-code)", fontWeight: 600, textTransform: "uppercase", color: `var(--sev-${selected.severity})`, marginBottom: 4 }}>
                   {selected.severity}
                 </div>
@@ -122,18 +411,14 @@ export default function Home() {
                   {selected.title}
                 </div>
                 <div className="dp-breadcrumb">
-                  {selected.file.split("/").map((seg, i, arr) => (
-                    <span key={i}>
-                      {i > 0 && <span className="sep"> / </span>}
-                      {seg}
-                    </span>
+                  {selected.file.split("/").map((seg, i) => (
+                    <span key={i}>{i > 0 && <span className="sep"> / </span>}{seg}</span>
                   ))}
                   <span className="sep"> · </span>
                   <span>line {selected.line}</span>
                   {selected.cwe && <><span className="sep"> · </span><span>{selected.cwe}</span></>}
                 </div>
 
-                {/* Code block */}
                 <div className="cb">
                   {parseSnippet(selected.code_snippet, selected.line).map((l, i) => (
                     <div key={i} className={`cl${l.vuln ? " vuln" : ""}`}>
@@ -143,13 +428,11 @@ export default function Home() {
                   ))}
                 </div>
 
-                {/* Analysis */}
                 <div className="sh">analysis</div>
                 <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--cg-text)", marginBottom: 20 }}>
                   {renderAI(selected.ai_explanation || selected.raw_description)}
                 </div>
 
-                {/* Fix suggestion */}
                 {selected.ai_fix && (
                   <>
                     <div className="sh">suggested fix</div>
@@ -164,19 +447,7 @@ export default function Home() {
                   </>
                 )}
 
-                {/* Triage */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20 }}>
-                  {(["block", "flag", "approve"] as const).map(a => (
-                    <button key={a} className={`tb ${a} ${decision(selected.id)?.action === a ? "active" : ""}`}>
-                      {a}
-                    </button>
-                  ))}
-                </div>
-                {decision(selected.id)?.policyRef && (
-                  <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginTop: 8 }}>
-                    policy: {decision(selected.id)?.policyRef}
-                  </div>
-                )}
+                {renderTriage(selected)}
               </div>
             ) : !scanning ? (
               <div className="empty-state">
@@ -186,9 +457,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Audit strip */}
         {result ? (
-          <AuditLog entries={result.auditLog} decisions={result.decisions} />
+          <AuditLog entries={result.auditLog} decisions={result.decisions} actionResults={Array.from(actionResults.values())} scanCtx={scanCtx} />
         ) : (
           <div className="audit-strip collapsed">
             <div className="audit-hdr">audit log <span>· 0 events</span></div>
@@ -219,35 +489,16 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-                  <textarea
-                    value={code}
-                    onChange={e => setCode(e.target.value)}
-                    placeholder="paste code here..."
-                    spellCheck={false}
-                  />
+                  <textarea value={code} onChange={e => setCode(e.target.value)} placeholder="paste code here..." spellCheck={false} />
                 </>
               ) : (
                 <>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      value={ghUrl}
-                      onChange={e => setGhUrl(e.target.value)}
-                      placeholder="https://github.com/owner/repo"
-                      onKeyDown={e => e.key === "Enter" && fetchGh()}
-                    />
-                    <button className="btn-ghost" onClick={fetchGh} disabled={ghFetching}>
-                      {ghFetching ? "fetching..." : "fetch"}
-                    </button>
+                    <input value={ghUrl} onChange={e => setGhUrl(e.target.value)} placeholder="https://github.com/owner/repo" onKeyDown={e => e.key === "Enter" && fetchGh()} />
+                    <button className="btn-ghost" onClick={fetchGh} disabled={ghFetching}>{ghFetching ? "fetching..." : "fetch"}</button>
                   </div>
                   {ghInfo && <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)" }}>{ghInfo}</div>}
-                  {code && (
-                    <textarea
-                      value={code}
-                      onChange={e => setCode(e.target.value)}
-                      placeholder="fetched code will appear here..."
-                      spellCheck={false}
-                    />
-                  )}
+                  {code && <textarea value={code} onChange={e => setCode(e.target.value)} placeholder="fetched code will appear here..." spellCheck={false} />}
                 </>
               )}
             </div>
@@ -255,9 +506,7 @@ export default function Home() {
               <span style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)" }}>
                 {code ? `${code.split("\n").length} lines · ${code.length} chars` : "no code loaded"}
               </span>
-              <button className="btn-primary" onClick={() => doScan(code, lang, scanFilenames[0])} disabled={!code.trim()}>
-                Scan
-              </button>
+              <button className="btn-primary" onClick={() => { setScanCtx(null); doScan(code, lang, scanFilenames[0]); }} disabled={!code.trim()}>Scan</button>
             </div>
           </div>
         </div>
