@@ -103,7 +103,7 @@ export default function Home() {
     finally { setGhFetching(false); }
   };
 
-  const handleRepoScan = (ctx: {
+  const handleScanFile = (ctx: {
     owner: string; repo: string; filePath: string;
     defaultBranch: string; fileSha: string; fileContent: string;
   }) => {
@@ -119,6 +119,17 @@ export default function Home() {
     const ext = ctx.filePath.split(".").pop()?.toLowerCase() || "";
     const langMap: Record<string, string> = { py: "python", js: "javascript", ts: "typescript", tsx: "typescript", jsx: "javascript", go: "go", java: "java", rb: "ruby", php: "php", rs: "rust" };
     doScan(ctx.fileContent, langMap[ext] || "python", ctx.filePath);
+  };
+
+  const handleScanRepo = (ctx: {
+    owner: string; repo: string; defaultBranch: string;
+    combinedCode: string; filenames: string[];
+  }) => {
+    // When scanning a whole repo, we don't have a single file context for PRs.
+    // The scan context is set to null to disable block/flag/approve actions that require file paths.
+    setScanCtx(null);
+    setScanFilenames(ctx.filenames);
+    doScan(ctx.combinedCode, "typescript", ctx.filenames[0]); // Default to TS for syntax highlighting
   };
 
   const resetToRepoPicker = () => {
@@ -382,7 +393,7 @@ export default function Home() {
             <StatsPanel stats={result.stats} filename={scanFilenames[0] || "code"} />
           </>
         ) : (
-          <RepoPicker onScanFile={handleRepoScan} />
+          <RepoPicker onScanFile={handleScanFile} onScanRepo={handleScanRepo} />
         )}
       </div>
 
@@ -476,7 +487,9 @@ export default function Home() {
             </div>
             <div className="tab-row">
               <button className={`tab-btn ${tab === "paste" ? "active" : ""}`} onClick={() => setTab("paste")}>paste</button>
-              <button className={`tab-btn ${tab === "github" ? "active" : ""}`} onClick={() => setTab("github")}>github url</button>
+              {!session?.accessToken && (
+                <button className={`tab-btn ${tab === "github" ? "active" : ""}`} onClick={() => setTab("github")}>github url</button>
+              )}
             </div>
             <div className="paste-modal-body">
               {tab === "paste" ? (

@@ -26,6 +26,13 @@ interface Props {
     fileSha: string;
     fileContent: string;
   }) => void;
+  onScanRepo: (ctx: {
+    owner: string;
+    repo: string;
+    defaultBranch: string;
+    combinedCode: string;
+    filenames: string[];
+  }) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -38,7 +45,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export default function RepoPicker({ onScanFile }: Props) {
+export default function RepoPicker({ onScanFile, onScanRepo }: Props) {
   const { data: session } = useSession();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,6 +57,7 @@ export default function RepoPicker({ onScanFile }: Props) {
   const [filesError, setFilesError] = useState("");
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [fetchingFile, setFetchingFile] = useState(false);
+  const [scanningRepo, setScanningRepo] = useState(false);
 
   const fetchRepos = useCallback(async () => {
     setLoading(true);
@@ -88,7 +96,7 @@ export default function RepoPicker({ onScanFile }: Props) {
     }
   };
 
-  const handleScan = async () => {
+  const handleScanFile = async () => {
     if (!selectedRepo || !selectedFile) return;
     setFetchingFile(true);
     const [owner, name] = selectedRepo.full_name.split("/");
@@ -111,6 +119,34 @@ export default function RepoPicker({ onScanFile }: Props) {
     }
   };
 
+  const handleScanRepo = async () => {
+    if (!selectedRepo) return;
+    setScanningRepo(true);
+    setFilesError("");
+    try {
+      const ghUrl = `https://github.com/${selectedRepo.full_name}`;
+      const res = await fetch("/api/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: ghUrl }),
+      });
+      const data = await res.json();
+      if (data.error) { setFilesError(data.error); return; }
+      const [owner, name] = selectedRepo.full_name.split("/");
+      onScanRepo({
+        owner,
+        repo: name,
+        defaultBranch: selectedRepo.default_branch,
+        combinedCode: data.combinedCode,
+        filenames: (data.files || []).map((f: { path: string }) => f.path),
+      });
+    } catch {
+      setFilesError("failed to fetch repository");
+    } finally {
+      setScanningRepo(false);
+    }
+  };
+
   if (!session?.accessToken) {
     return (
       <div style={{ padding: 16 }}>
@@ -122,13 +158,14 @@ export default function RepoPicker({ onScanFile }: Props) {
   }
 
   const filtered = repos.filter(r => r.full_name.toLowerCase().includes(filter.toLowerCase()));
+  const isBusy = fetchingFile || scanningRepo;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 0 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span className="sh" style={{ marginBottom: 0 }}>
-          {selectedRepo ? "file" : "repository"}
+          {selectedRepo ? selectedRepo.full_name.split("/")[1] : "repository"}
         </span>
         {selectedRepo ? (
           <span
@@ -206,9 +243,26 @@ export default function RepoPicker({ onScanFile }: Props) {
         </>
       ) : (
         <>
-          <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginBottom: 8 }}>
-            {selectedRepo.full_name}
+          {/* Scan entire repo button */}
+          <button
+            onClick={handleScanRepo}
+            disabled={isBusy || filesLoading}
+            style={{
+              width: "100%", border: "1px solid var(--cg-border2)", background: "transparent",
+              color: "var(--cg-text)", fontSize: 12, padding: 6, borderRadius: 4,
+              cursor: isBusy || filesLoading ? "not-allowed" : "pointer", marginBottom: 10,
+              fontFamily: "var(--font-ui)", opacity: isBusy || filesLoading ? 0.5 : 1,
+            }}
+            onMouseEnter={e => { if (!isBusy) e.currentTarget.style.background = "var(--cg-surface2)"; }}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            {scanningRepo ? "scanning repo..." : "Scan entire repo →"}
+          </button>
+
+          <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            or select a file
           </div>
+
           <div style={{ flex: 1, overflowY: "auto" }}>
             {filesLoading ? (
               [1, 2, 3].map(i => (
@@ -242,15 +296,15 @@ export default function RepoPicker({ onScanFile }: Props) {
           </div>
           {selectedFile && (
             <button
-              onClick={handleScan}
-              disabled={fetchingFile}
+              onClick={handleScanFile}
+              disabled={isBusy}
               style={{
                 width: "100%", border: "1px solid var(--cg-border2)", background: "transparent",
                 color: "var(--cg-text)", fontSize: 12, padding: 6, borderRadius: 4,
-                cursor: fetchingFile ? "not-allowed" : "pointer", marginTop: 8,
-                fontFamily: "var(--font-ui)", opacity: fetchingFile ? 0.5 : 1,
+                cursor: isBusy ? "not-allowed" : "pointer", marginTop: 8,
+                fontFamily: "var(--font-ui)", opacity: isBusy ? 0.5 : 1,
               }}
-              onMouseEnter={e => { if (!fetchingFile) e.currentTarget.style.background = "var(--cg-surface2)"; }}
+              onMouseEnter={e => { if (!isBusy) e.currentTarget.style.background = "var(--cg-surface2)"; }}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               {fetchingFile ? "loading..." : "Scan file →"}
