@@ -286,7 +286,7 @@ export default function Home() {
               >view →</a>
             </>
           ) : (
-            <>blocked by local policy</>
+            <>GitHub not configured — local block only</>
           )}
         </div>
       );
@@ -302,7 +302,7 @@ export default function Home() {
               >view →</a>
             </>
           ) : (
-            <>flagged by local policy</>
+            <>GitHub not configured — local flag only</>
           )}
         </div>
       );
@@ -318,7 +318,7 @@ export default function Home() {
               >view PR →</a>
             </>
           ) : (
-            <>approved by local policy</>
+            <>GitHub not configured — local approval only</>
           )}
         </div>
       );
