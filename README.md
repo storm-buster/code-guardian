@@ -2,98 +2,108 @@
 
 > **NeuroX Hackathon 2026 | ArmorIQ Track 2: AI Agent for the Real World**
 
-AI-powered code security scanner that finds vulnerabilities, explains them in plain English using real LLM analysis, auto-triages with policy-gated decisions, and logs everything via ArmorIQ SDK.
+An AI-powered security code review agent wrapped in a stunning 2026-era Cybernetic Terminal UI. It automatically scans repositories or raw code for vulnerabilities, generates context-aware explanations and remediation code using LLMs, triages findings based on ArmorIQ policies, and takes real-time action directly on GitHub.
 
-## 🔥 What It Does
+## 🔥 Key Features
 
-1. **Paste your code** → real-time static analysis with 15 vulnerability detection patterns
-2. **AI explains** → each finding sent to LLM (Gemini 2.5 Flash via OpenRouter) for context-aware explanation mentioning actual variable names, line numbers
-3. **Agent triages** → severity-based auto-triage (block/flag/approve) with policy-backed reasoning
-4. **ArmorIQ logs** → plan capture + intent token issuance via `@armoriq/sdk` for cryptographic audit trail
+1. **GitHub Integration (OAuth)**: Securely connect your GitHub account via NextAuth to import repositories or individual files.
+2. **Real-Time Remediation (Octokit)**: 
+   - **Approve**: The agent automatically creates a new branch on GitHub, applies the AI-generated security fix, and opens a Pull Request.
+   - **Flag / Block**: Instantly opens a labeled Issue (`needs-security-review` / `security-blocked`) on the target GitHub repository for developer attention.
+3. **Full Repository Scanning**: Scan entire GitHub repositories at once. (Note: Automated PRs are disabled during full repo scans to prevent branch pollution; blocking/flagging remains active).
+4. **AI Vulnerability Analysis**: Powered by Google Gemini 2.5 Flash via OpenRouter. The AI explains the vulnerability context, line numbers, variables, and writes exact drop-in replacement code.
+5. **ArmorIQ Policy Triage**: Findings are run against ArmorIQ SDK policies, issuing verifiable cryptographic audit trails and intent tokens for every decision.
+6. **2026 "Threat Intelligence" UI**: Features a high-performance Three.js (`@react-three/fiber`) interactive particle background, glassmorphism design, pulsing threat indicators, and live triage statistics.
 
-## 🏗️ Tech Stack
+## 🏗️ Architecture Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 16, React, TypeScript |
-| Styling | Tailwind CSS + Custom CSS (Glassmorphism, Animations) |
-| AI/LLM | Google Gemini 2.5 Flash via OpenRouter API |
-| Security SDK | ArmorIQ TypeScript SDK (`@armoriq/sdk`) |
-| Scanner | Custom regex-based static analysis engine |
-| Deployment | Vercel |
+| **Frontend Framework** | Next.js 16 (App Router), React, TypeScript |
+| **Styling & 3D** | Custom CSS (Glassmorphism), Tailwind CSS, `@react-three/fiber`, `three` |
+| **Authentication** | NextAuth (`next-auth`) with GitHub Provider (`read:user`, `repo` scopes) |
+| **GitHub Actions** | `@octokit/rest` for automated Git branching, commits, PRs, and Issues |
+| **AI/LLM Engine** | Google Gemini 2.5 Flash via OpenRouter API |
+| **Security Audit** | ArmorIQ TypeScript SDK (`@armoriq/sdk`) |
+| **Static Analysis** | Custom regex-based AST scanner (15+ vulnerability patterns) |
 
 ## 🚀 Quick Start
 
 ```bash
-# Clone
+# Clone the repository
 git clone <repo-url>
 cd code-guardian
 
-# Install
+# Install dependencies
 npm install
 
-# Set up environment
+# Set up environment variables
 cp .env.example .env.local
-# Edit .env.local with your API keys
-
-# Run
-npm run dev
 ```
 
-## 🔑 Environment Variables
+### Configure `.env.local`
 
-| Variable | Description | Get it from |
-|----------|-------------|-------------|
-| `OPENROUTER_API_KEY` | LLM API key for AI explanations | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `ARMORIQ_API_KEY` | ArmorIQ SDK key for audit + policy | [platform.armoriq.ai](https://platform.armoriq.ai) |
+```env
+# NextAuth settings
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=generate-a-secure-random-string
+
+# GitHub OAuth App (Create at GitHub -> Settings -> Developer Settings -> OAuth Apps)
+GITHUB_CLIENT_ID=your_oauth_client_id
+GITHUB_CLIENT_SECRET=your_oauth_client_secret
+
+# AI & Security Services
+OPENROUTER_API_KEY=your_openrouter_key
+ARMORIQ_API_KEY=your_armoriq_key
+```
+
+```bash
+# Run the development server
+npm run dev
+```
 
 ## 📁 Project Structure
 
 ```
 src/
 ├── app/
-│   ├── api/scan/route.ts    # API: scanner + LLM + ArmorIQ pipeline
-│   ├── layout.tsx           # Root layout
-│   ├── page.tsx             # Main dashboard
-│   └── globals.css          # Design system
+│   ├── api/
+│   │   ├── auth/          # NextAuth GitHub Provider configuration
+│   │   ├── github/        # Octokit endpoints (approve, block, flag, repos, tree, file)
+│   │   └── scan/          # Scanner + LLM + ArmorIQ pipeline
+│   ├── layout.tsx         # Root layout
+│   ├── page.tsx           # Threat Terminal Dashboard & Triage Orchestrator
+│   └── globals.css        # 2026 Design System (CSS variables, animations)
 ├── components/
-│   ├── Navbar.tsx           # Top navigation
-│   ├── StatsPanel.tsx       # Security score + severity breakdown
-│   ├── FindingsPanel.tsx    # Expandable vulnerability cards
-│   ├── AuditLog.tsx         # ArmorIQ audit trail viewer
-│   └── ScanAnimation.tsx    # Scanning state animation
+│   ├── ParticleBackground.tsx # Three.js interactive 3D background
+│   ├── RepoPicker.tsx         # GitHub repository & file selection modal
+│   ├── ToastContainer.tsx     # Real-time event notification system
+│   ├── StatsPanel.tsx         # Live triage statistics
+│   ├── FindingsPanel.tsx      # Expandable vulnerability cards
+│   └── AuditLog.tsx           # ArmorIQ audit trail viewer
 └── lib/
-    ├── scanner.ts           # Static analysis engine (15 vuln patterns)
-    ├── llm.ts               # OpenRouter LLM integration
-    ├── armoriq.ts           # ArmorIQ SDK integration
-    ├── types.ts             # TypeScript types
-    └── demo-code.ts         # Demo vulnerable code samples
+    ├── scanner.ts         # Static analysis engine (CWE patterns)
+    ├── llm.ts             # OpenRouter LLM integration
+    └── armoriq.ts         # ArmorIQ SDK integration
 ```
 
-## 🔍 Vulnerability Patterns Detected
+## 🔐 GitHub Permissions
 
-- SQL Injection (CWE-89)
-- Cross-Site Scripting / XSS (CWE-79)
-- Hardcoded Secrets / API Keys (CWE-798)
-- OS Command Injection (CWE-78)
-- Path Traversal (CWE-22)
-- Insecure Deserialization (CWE-502)
-- Weak Cryptography (CWE-327)
-- CORS Misconfiguration (CWE-942)
-- Missing Authentication (CWE-306)
-- SSRF (CWE-918)
-- JWT Verification Bypass (CWE-347)
-- Debug Mode / Sensitive Logging (CWE-215)
+When users click **Connect GitHub**, they will be prompted to authorize the application with the `repo` scope. This is strictly required to enable the AI Agent to:
+- Read repository files and directory trees.
+- Create new git branches and commit remediation code.
+- Open Pull Requests (`Approve` action).
+- Open Security Issues and apply labels (`Block` / `Flag` actions).
 
-## 🌐 Deploy to Vercel
+Because it uses the logged-in user's Personal Access Token via OAuth, the agent acts entirely on their behalf and is bound by their specific repository permissions.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+## 🌐 Deployment (Vercel)
 
-1. Push to GitHub
-2. Import in Vercel
-3. Add environment variables (`OPENROUTER_API_KEY`, `ARMORIQ_API_KEY`)
-4. Deploy
+1. Push code to your GitHub repository.
+2. Import the project into Vercel.
+3. In your Vercel Project Settings → Environment Variables, add **all** variables from your `.env.local`.
+   - *Note: Ensure `NEXTAUTH_URL` is set to your production Vercel domain.*
+4. Deploy.
 
 ## 👥 Team
-
 **Code Guardian Team** — NeuroX Hackathon 2026
