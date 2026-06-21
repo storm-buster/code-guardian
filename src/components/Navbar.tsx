@@ -22,7 +22,8 @@ export default function Navbar({ onPaste, scanning }: Props) {
       </span>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {cfg && (
-          <span style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)" }}>
+          <span style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", display: "flex", alignItems: "center", gap: 4 }}>
+            {cfg.armoriqConfigured && <span className="connected-dot" />}
             {cfg.armoriqConfigured ? "armoriq: connected" : "armoriq: offline"}
             {" · "}
             gemini-2.5-flash

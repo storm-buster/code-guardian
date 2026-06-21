@@ -1,5 +1,6 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import StatsPanel from "@/components/StatsPanel";
@@ -7,7 +8,10 @@ import FindingsPanel from "@/components/FindingsPanel";
 import ScanAnimation from "@/components/ScanAnimation";
 import AuditLog from "@/components/AuditLog";
 import RepoPicker from "@/components/RepoPicker";
+import ToastContainer, { showToast } from "@/components/ToastContainer";
 import { ScanResult, Finding } from "@/lib/types";
+
+const ParticleBackground = dynamic(() => import("@/components/ParticleBackground"), { ssr: false });
 
 interface ScanContext {
   owner: string;
@@ -158,7 +162,9 @@ export default function Home() {
         findingId: finding.id, type: "block",
         ...(data.error ? { error: data.error } : { issueUrl: data.issueUrl, issueNumber: data.issueNumber }),
       }));
-    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "block", error: "action failed: network error" })); }
+      if (!data.error) showToast({ type: "block", title: finding.title, message: `Issue #${data.issueNumber} created`, policyId: decision(finding.id)?.policyRef });
+      else showToast({ type: "error", title: "Block failed", message: data.error });
+    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "block", error: "action failed: network error" })); showToast({ type: "error", title: "Block failed", message: "Network error" }); }
     finally { setActionLoading(null); }
   };
 
@@ -179,7 +185,9 @@ export default function Home() {
         findingId: finding.id, type: "flag",
         ...(data.error ? { error: data.error } : { issueUrl: data.issueUrl, issueNumber: data.issueNumber }),
       }));
-    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "flag", error: "action failed: network error" })); }
+      if (!data.error) showToast({ type: "flag", title: finding.title, message: `Issue #${data.issueNumber} created`, policyId: decision(finding.id)?.policyRef });
+      else showToast({ type: "error", title: "Flag failed", message: data.error });
+    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "flag", error: "action failed: network error" })); showToast({ type: "error", title: "Flag failed", message: "Network error" }); }
     finally { setActionLoading(null); }
   };
 
@@ -211,7 +219,9 @@ export default function Home() {
         ...(data.error ? { error: data.error } : { prUrl: data.prUrl, prNumber: data.prNumber, branchName: data.branchName }),
       }));
       setApproveMode(null);
-    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "approve", error: "fix failed: network error" })); }
+      if (!data.error) showToast({ type: "approve", title: finding.title, message: `PR #${data.prNumber} opened on ${data.branchName}`, policyId: decision(finding.id)?.policyRef });
+      else showToast({ type: "error", title: "Approve failed", message: data.error });
+    } catch { setActionResults(prev => new Map(prev).set(finding.id, { findingId: finding.id, type: "approve", error: "fix failed: network error" })); showToast({ type: "error", title: "Approve failed", message: "Network error" }); }
     finally { setActionLoading(null); }
   };
 
@@ -235,6 +245,27 @@ export default function Home() {
 
   const hasGhActions = !!scanCtx && !!session?.accessToken;
   const branchValid = isValidBranch(branchName);
+
+  // Local triage — works without GitHub, updates state + toast + sidebar
+  const doLocalTriage = (action: "block" | "flag" | "approve", finding: Finding) => {
+    const policyId = decision(finding.id)?.policyRef || "LOCAL";
+    setActionResults(prev => new Map(prev).set(finding.id, {
+      findingId: finding.id, type: action,
+    }));
+    showToast({ type: action, title: finding.title, message: `${finding.file} · line ${finding.line}`, policyId });
+  };
+
+  // Live triage counts from action results
+  const triageCounts = useMemo(() => {
+    let blocked = 0, flagged = 0, approved = 0;
+    actionResults.forEach(ar => {
+      if (ar.error) return;
+      if (ar.type === "block") blocked++;
+      else if (ar.type === "flag") flagged++;
+      else if (ar.type === "approve") approved++;
+    });
+    return { blocked, flagged, approved };
+  }, [actionResults]);
 
   // --- Render triage section for selected finding ---
   const renderTriage = (finding: Finding) => {
@@ -340,28 +371,31 @@ export default function Home() {
     return (
       <div style={{ marginTop: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {hasGhActions ? (
-            <>
-              <button className={`tb block ${decision(finding.id)?.action === "block" ? "active" : ""}`}
-                onClick={() => doBlock(finding)} disabled={isLoading}>
-                {isLoading && actionLoading === finding.id ? "..." : "block"}
-              </button>
-              <button className={`tb flag ${decision(finding.id)?.action === "flag" ? "active" : ""}`}
-                onClick={() => doFlag(finding)} disabled={isLoading}>
-                flag
-              </button>
-              <button className={`tb approve ${decision(finding.id)?.action === "approve" ? "active" : ""}`}
-                onClick={() => startApprove(finding)} disabled={isLoading}>
-                approve
-              </button>
-            </>
-          ) : (
-            (["block", "flag", "approve"] as const).map(a => (
-              <button key={a} className={`tb ${a} ${decision(finding.id)?.action === a ? "active" : ""}`}>
+          {(["block", "flag", "approve"] as const).map(a => {
+            const isActive = decision(finding.id)?.action === a;
+            const isTriaged = !!actionResults.get(finding.id);
+            const triagedAs = actionResults.get(finding.id)?.type;
+            const isThis = triagedAs === a;
+            return (
+              <button
+                key={a}
+                className={`tb ${a}${isActive || isThis ? " active" : ""}${isTriaged && !isThis ? " triaged-other" : ""}${isLoading && actionLoading === finding.id ? " loading" : ""}`}
+                disabled={isLoading || (isTriaged && !isThis)}
+                onClick={() => {
+                  if (isTriaged) return;
+                  if (hasGhActions) {
+                    if (a === "block") doBlock(finding);
+                    else if (a === "flag") doFlag(finding);
+                    else startApprove(finding);
+                  } else {
+                    doLocalTriage(a, finding);
+                  }
+                }}
+              >
                 {a}
               </button>
-            ))
-          )}
+            );
+          })}
         </div>
         {decision(finding.id)?.policyRef && (
           <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginTop: 8 }}>
@@ -373,6 +407,9 @@ export default function Home() {
   };
 
   return (
+    <>
+    <ParticleBackground />
+    <ToastContainer />
     <div className="app-layout">
       <Navbar onPaste={() => setShowPaste(true)} scanning={scanning} />
 
@@ -390,7 +427,7 @@ export default function Home() {
                 ← change file
               </div>
             )}
-            <StatsPanel stats={result.stats} filename={scanFilenames[0] || "code"} />
+            <StatsPanel stats={result.stats} filename={scanFilenames[0] || "code"} triageCounts={triageCounts} />
           </>
         ) : (
           <RepoPicker onScanFile={handleScanFile} onScanRepo={handleScanRepo} />
@@ -400,6 +437,7 @@ export default function Home() {
       <div className="main-col">
         <div className="content-split">
           <div className="findings-col">
+            {scanning && <div className="scan-beam" />}
             {scanning ? (
               <ScanAnimation filenames={scanFilenames} />
             ) : result ? (
@@ -415,7 +453,7 @@ export default function Home() {
                 <div className="mobile-only mobile-detail-back" onClick={() => setMobileDetail(false)}>
                   ← back to findings
                 </div>
-                <div style={{ fontSize: 11, fontFamily: "var(--font-code)", fontWeight: 600, textTransform: "uppercase", color: `var(--sev-${selected.severity})`, marginBottom: 4 }}>
+                <div style={{ fontSize: 10, fontFamily: "var(--font-code)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.15em", color: `var(--sev-${selected.severity})`, marginBottom: 4 }}>
                   {selected.severity}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 500, color: "var(--cg-text)", marginBottom: 4 }}>
@@ -429,6 +467,7 @@ export default function Home() {
                   <span>line {selected.line}</span>
                   {selected.cwe && <><span className="sep"> · </span><span>{selected.cwe}</span></>}
                 </div>
+                <div className="detail-gradient-line" />
 
                 <div className="cb">
                   {parseSnippet(selected.code_snippet, selected.line).map((l, i) => (
@@ -525,5 +564,6 @@ export default function Home() {
         </div>
       )}
     </div>
+    </>
   );
 }
