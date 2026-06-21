@@ -36,9 +36,7 @@ CODE SNIPPET:
 ${finding.code_snippet}
 \`\`\`
 
-Respond with a JSON object (no markdown, no code fences, just raw JSON) with exactly these keys:
-{
-  "ai_explanation": "A 3-paragraph plain-English explanation. Paragraph 1: What's happening in this specific code (reference the actual line/variable names). Paragraph 2: Why it's dangerous with a real-world example. Paragraph 3: The real-world impact (mention a known breach if relevant). Use **bold** for key terms.",
+  "ai_explanation": "A highly detailed, comprehensive, and beginner-friendly explanation (at least 4-5 paragraphs). Paragraph 1: Start with a simple, non-technical analogy (e.g., comparing the vulnerability to leaving a house key under a doormat). Paragraph 2: Explain exactly what is happening in this specific code (reference the actual line and variable names) in plain English that a non-programmer could understand. Paragraph 3: Explain the technical danger in simple terms. Paragraph 4: Describe the worst-case scenario and real-world impact (mention a famous data breach if relevant). Make it extremely long and easy to read. Use **bold** for key terms and emphasize clarity.",
   "ai_fix": "The actual corrected code that fixes this vulnerability. Show the before→after. Include comments explaining why each change was made. Keep it concise but complete.",
   "confidence": <number 0-100 representing how confident you are this is a true positive>
 }`;
@@ -129,22 +127,46 @@ function getFallbackAnalysis(finding: {
 }): LLMResponse {
   const templates: Record<string, LLMResponse> = {
     Injection: {
-      ai_explanation: `**What's happening:** The code at line ${finding.line} in \`${finding.file}\` directly embeds user input into a query/command string. An attacker can break out of the intended string and inject their own commands.\n\n**Why it's dangerous:** This allows an attacker to read, modify, or delete your entire database, or execute arbitrary system commands. This is consistently rated the #1 web vulnerability by OWASP.\n\n**Real-world impact:** In 2023, MOVEit Transfer SQL injection (CVE-2023-34362) led to data theft affecting 60M+ people worldwide.`,
+      ai_explanation: `**The Analogy:** Imagine you have a security guard at a bank who blindly follows any instructions written on a piece of paper handed to them. If a customer writes "Give me my $10 balance, and also empty the entire vault," the guard does exactly that without questioning it. This is exactly what SQL Injection is.
+
+**What's happening here:** At line ${finding.line} in \`${finding.file}\`, your code takes input directly from a user and plugs it straight into a database command without checking it first. It assumes the user is just providing normal text.
+
+**Why it's dangerous:** Because the database can't tell the difference between your intended command and the user's input, an attacker can intentionally type in malicious database commands. Instead of just searching for their own profile, they can trick the database into handing over every single user's password, or even permanently deleting the entire database.
+
+**Real-world impact:** This is one of the oldest and most devastating flaws on the internet. In 2023, the MOVEit Transfer SQL injection vulnerability (CVE-2023-34362) allowed hackers to steal sensitive data from thousands of organizations, affecting over 60 million people worldwide. It is a critical, top-priority fix.`,
       ai_fix: `// Use parameterized queries instead:\ncursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))\n\n// For Node.js:\ndb.query("SELECT * FROM users WHERE id = ?", [userId])`,
       confidence: 92,
     },
     XSS: {
-      ai_explanation: `**What's happening:** At line ${finding.line}, user-controlled content is inserted into the page without sanitization.\n\n**Why it's dangerous:** Attackers can steal session cookies, redirect users to phishing pages, or perform actions on behalf of logged-in users.\n\n**Real-world impact:** XSS in the British Airways booking site (2018) led to theft of 380,000 payment cards.`,
+      ai_explanation: `**The Analogy:** Think of your website as a public bulletin board where anyone can pin a note. Now imagine a malicious person pins a note that magically hypnotizes anyone who reads it, forcing them to hand over their wallet. This is what Cross-Site Scripting (XSS) does to your users' web browsers.
+
+**What's happening here:** At line ${finding.line}, your application takes text provided by a user and displays it directly on the webpage without cleaning it up (sanitizing it) first. 
+
+**Why it's dangerous:** An attacker can submit hidden, malicious JavaScript code instead of a normal comment or name. When an innocent user visits that page, their web browser sees the script and automatically runs it. This invisible script can steal their login cookies, silently redirect them to a fake banking site, or perform actions as if they were the user.
+
+**Real-world impact:** XSS is incredibly common. In 2018, hackers used a sophisticated XSS attack on the British Airways booking website, modifying a script on the payment page to silently steal the credit card details of 380,000 customers as they were typing them in.`,
       ai_fix: `// Use textContent instead of innerHTML:\nelement.textContent = userInput;\n\n// Use DOMPurify:\nimport DOMPurify from 'dompurify';\nconst clean = DOMPurify.sanitize(dirty);`,
       confidence: 88,
     },
     Secrets: {
-      ai_explanation: `**What's happening:** A sensitive credential is hardcoded at line ${finding.line}. Anyone with source access can extract this key.\n\n**Why it's dangerous:** Leaked API keys grant attackers the same access as the key holder.\n\n**Real-world impact:** In 2022, Toyota exposed a key in a public GitHub repo for 5 years, leaking 296,000 customer records.`,
+      ai_explanation: `**The Analogy:** Imagine buying an impenetrable, state-of-the-art safe to protect your valuables, but then taping the combination code directly onto the front door of the safe. That is exactly what hardcoding secrets means in software development.
+
+**What's happening here:** A highly sensitive credential (like an API key, password, or encryption token) is written entirely in plain text at line ${finding.line}. Anyone who can read this source code file can see the secret immediately.
+
+**Why it's dangerous:** Source code gets copied, shared, and backed up in many places. If this code is ever uploaded to a public repository like GitHub, or if a hacker gains even brief access to your internal systems, they instantly obtain the master key. With that key, they can bypass all your security systems, access your databases, and rack up massive bills on your cloud accounts.
+
+**Real-world impact:** In 2022, automobile giant Toyota accidentally exposed an internal access key in a public GitHub repository that was left unnoticed for five years. This single mistake leaked the sensitive personal information of almost 300,000 customers.`,
       ai_fix: `// Move secrets to environment variables:\nAPI_KEY = os.environ.get("API_KEY")\n// Or: process.env.API_KEY`,
       confidence: 95,
     },
     Deserialization: {
-      ai_explanation: `**What's happening:** Line ${finding.line} deserializes/evaluates untrusted data, which can execute arbitrary code.\n\n**Why it's dangerous:** Provides Remote Code Execution (RCE) on your server.\n\n**Real-world impact:** Apache Commons deserialization vulnerability affected thousands of enterprise Java applications.`,
+      ai_explanation: `**The Analogy:** Imagine you receive a locked, sealed mystery box in the mail from a total stranger. Instead of checking what's inside or scanning it with a metal detector, you immediately open it and blindly follow whatever instructions are written on the card inside. If the card says "set this box on fire," you do it. This is exactly what Insecure Deserialization is.
+
+**What's happening here:** At line ${finding.line}, your code takes data that was packaged up (serialized) by an external user, and unpacks it (deserializes it) directly into the application's memory without verifying if it is safe. 
+
+**Why it's dangerous:** Deserialization doesn't just unpack plain data—it can reconstruct complex program logic and executable objects. An attacker can carefully craft a malicious package so that the absolute second your application unpacks it, the package springs to life and runs a destructive command on your server. This gives the attacker Remote Code Execution (RCE), meaning they completely own your server.
+
+**Real-world impact:** This is an incredibly severe flaw. A famous deserialization vulnerability in Apache Commons Collections led to the catastrophic 2017 Equifax data breach, where hackers exploited the flaw to steal the highly sensitive personal data (including Social Security numbers) of 147 million Americans.`,
       ai_fix: `// Never unpickle untrusted data. Use JSON:\nconfig = json.loads(config_data)\n// For YAML:\nparsed = yaml.safe_load(data)`,
       confidence: 90,
     },

@@ -237,10 +237,19 @@ export default function Home() {
   };
 
   const renderAI = (text: string) => {
-    const parts = text.split(/`([^`]+)`/g);
-    return parts.map((p, i) =>
-      i % 2 === 1 ? <code key={i} className="ic">{p}</code> : <span key={i}>{p}</span>
-    );
+    return text.split(/\n\n+/).map((para, paraIdx) => {
+      const codeParts = para.split(/`([^`]+)`/g);
+      const renderedPara = codeParts.map((p, i) => {
+        if (i % 2 === 1) return <code key={i} className="ic">{p}</code>;
+        const boldParts = p.split(/\*\*([^*]+)\*\*/g);
+        return <span key={i}>
+          {boldParts.map((bp, j) => 
+            j % 2 === 1 ? <strong key={j} style={{ color: "var(--cg-text)", fontWeight: 600 }}>{bp}</strong> : bp
+          )}
+        </span>;
+      });
+      return <p key={paraIdx} style={{ marginBottom: 12 }}>{renderedPara}</p>;
+    });
   };
 
   const hasGhActions = !!scanCtx && !!session?.accessToken;
