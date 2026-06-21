@@ -276,32 +276,50 @@ export default function Home() {
     if (ar && !ar.error) {
       if (ar.type === "block") return (
         <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginTop: 20 }}>
-          issue opened · #{ar.issueNumber} ·{" "}
-          <a href={ar.issueUrl} target="_blank" rel="noreferrer"
-            style={{ color: "var(--cg-muted)" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
-          >view →</a>
+          {ar.issueNumber ? (
+            <>
+              issue opened · #{ar.issueNumber} ·{" "}
+              <a href={ar.issueUrl} target="_blank" rel="noreferrer"
+                style={{ color: "var(--cg-muted)" }}
+                onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+              >view →</a>
+            </>
+          ) : (
+            <>blocked by local policy</>
+          )}
         </div>
       );
       if (ar.type === "flag") return (
         <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginTop: 20 }}>
-          flagged for review · #{ar.issueNumber} ·{" "}
-          <a href={ar.issueUrl} target="_blank" rel="noreferrer"
-            style={{ color: "var(--cg-muted)" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
-          >view →</a>
+          {ar.issueNumber ? (
+            <>
+              flagged for review · #{ar.issueNumber} ·{" "}
+              <a href={ar.issueUrl} target="_blank" rel="noreferrer"
+                style={{ color: "var(--cg-muted)" }}
+                onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+              >view →</a>
+            </>
+          ) : (
+            <>flagged by local policy</>
+          )}
         </div>
       );
       if (ar.type === "approve") return (
         <div style={{ fontSize: 12, fontFamily: "var(--font-code)", color: "var(--cg-muted)", marginTop: 20 }}>
-          PR #{ar.prNumber} opened · <code className="ic">{ar.branchName}</code> ·{" "}
-          <a href={ar.prUrl} target="_blank" rel="noreferrer"
-            style={{ color: "var(--cg-muted)" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
-          >view PR →</a>
+          {ar.prNumber ? (
+            <>
+              PR #{ar.prNumber} opened · <code className="ic">{ar.branchName}</code> ·{" "}
+              <a href={ar.prUrl} target="_blank" rel="noreferrer"
+                style={{ color: "var(--cg-muted)" }}
+                onMouseEnter={e => (e.currentTarget.style.color = "var(--cg-text)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "var(--cg-muted)")}
+              >view PR →</a>
+            </>
+          ) : (
+            <>approved by local policy</>
+          )}
         </div>
       );
     }
