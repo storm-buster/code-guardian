@@ -26,7 +26,7 @@ export default function Navbar({ onPaste, scanning }: Props) {
             {cfg.armoriqConfigured && <span className="connected-dot" />}
             {cfg.armoriqConfigured ? "armoriq: connected" : "armoriq: offline"}
             {" · "}
-            gemini-2.5-flash
+          
           </span>
         )}
 

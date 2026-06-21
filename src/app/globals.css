@@ -14,9 +14,9 @@
   --cg-surface2: #0D1117;
   --cg-border: rgba(255,255,255,0.08);
   --cg-border2: rgba(255,255,255,0.12);
-  --cg-text: #E2E8F0;
-  --cg-muted: #64748B;
-  --cg-dim: #334155;
+  --cg-text: #F8FAFC;
+  --cg-muted: #94A3B8;
+  --cg-dim: #64748B;
 
   /* Accent colors — 2026 palette */
   --accent-cyan: #00F5FF;
@@ -43,7 +43,7 @@
   --glass-blur: blur(20px);
 }
 
-html, body { height: 100%; overflow: hidden; background: var(--cg-bg); color: var(--cg-text); font-family: var(--font-ui); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+html, body { height: 100%; overflow: hidden; background: var(--cg-bg); color: var(--cg-text); font-family: var(--font-ui); font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -134,12 +134,12 @@ html, body { height: 100%; overflow: hidden; background: var(--cg-bg); color: va
 .finding-row td.sev-indicator { padding: 0; width: 0; }
 
 .finding-title {
-  font-size: 13px; font-weight: 500; color: var(--cg-text);
+  font-size: 14px; font-weight: 500; color: var(--cg-text);
   max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.finding-cwe { font-size: 10px; font-family: var(--font-code); color: var(--cg-dim); margin-left: 6px; }
-.finding-location { font-size: 11px; font-family: var(--font-code); color: var(--cg-muted); white-space: nowrap; }
-.finding-sev-label { font-size: 10px; font-weight: 600; font-family: var(--font-code); text-transform: uppercase; text-align: right; }
+.finding-cwe { font-size: 11px; font-family: var(--font-code); color: var(--cg-dim); margin-left: 6px; }
+.finding-location { font-size: 12px; font-family: var(--font-code); color: var(--cg-muted); white-space: nowrap; }
+.finding-sev-label { font-size: 11px; font-weight: 600; font-family: var(--font-code); text-transform: uppercase; text-align: right; }
 .finding-row.sev-critical .finding-sev-label { color: var(--sev-critical); }
 .finding-row.sev-high .finding-sev-label { color: var(--sev-high); }
 .finding-row.sev-medium .finding-sev-label { color: var(--sev-medium); }
@@ -150,15 +150,15 @@ html, body { height: 100%; overflow: hidden; background: var(--cg-bg); color: va
 .cb {
   background: var(--cg-surface2); border: 1px solid var(--glass-border);
   border-radius: 6px; overflow-x: auto;
-  font-family: var(--font-code); font-size: 13px; line-height: 1.65; margin: 16px 0;
+  font-family: var(--font-code); font-size: 14px; line-height: 1.65; margin: 16px 0;
 }
 .cl { display: flex; padding: 0 12px; }
 .cl.vuln { background: rgba(255,34,68,0.10); box-shadow: inset 2px 0 0 var(--sev-critical); }
-.cln { color: var(--cg-dim); user-select: none; text-align: right; width: 36px; padding-right: 12px; flex-shrink: 0; font-size: 12px; }
+.cln { color: var(--cg-dim); user-select: none; text-align: right; width: 36px; padding-right: 12px; flex-shrink: 0; font-size: 13px; }
 .clc { flex: 1; white-space: pre; overflow-x: auto; }
 
 /* Inline code */
-code.ic { font-family: var(--font-code); font-size: 12px; background: rgba(0,245,255,0.06); padding: 1px 5px; border-radius: 3px; color: var(--accent-cyan); }
+code.ic { font-family: var(--font-code); font-size: 13px; background: rgba(0,245,255,0.06); padding: 1px 5px; border-radius: 3px; color: var(--accent-cyan); }
 
 /* ═══ TRIAGE BUTTONS — 2026 PILL DESIGN ═══ */
 .tb {

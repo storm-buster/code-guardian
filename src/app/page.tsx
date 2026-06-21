@@ -367,7 +367,7 @@ export default function Home() {
             invalid branch name
           </div>
         )}
-        <div style={{ fontSize: 11, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginTop: 4 }}>
+        <div style={{ fontSize: 13, fontFamily: "var(--font-code)", color: "var(--cg-dim)", marginTop: 4 }}>
           will be created from <code className="ic">{scanCtx?.defaultBranch || "main"}</code>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -481,10 +481,10 @@ export default function Home() {
                 <div className="mobile-only mobile-detail-back" onClick={() => setMobileDetail(false)}>
                   ← back to findings
                 </div>
-                <div style={{ fontSize: 10, fontFamily: "var(--font-code)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.15em", color: `var(--sev-${selected.severity})`, marginBottom: 4 }}>
+                <div style={{ fontSize: 12, fontFamily: "var(--font-code)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.15em", color: `var(--sev-${selected.severity})`, marginBottom: 4 }}>
                   {selected.severity}
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 500, color: "var(--cg-text)", marginBottom: 4 }}>
+                <div style={{ fontSize: 20, fontWeight: 500, color: "var(--cg-text)", marginBottom: 4 }}>
                   {selected.title}
                 </div>
                 <div className="dp-breadcrumb">
@@ -507,7 +507,7 @@ export default function Home() {
                 </div>
 
                 <div className="sh">analysis</div>
-                <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--cg-text)", marginBottom: 20 }}>
+                <div style={{ fontSize: 15, lineHeight: 1.7, color: "var(--cg-text)", marginBottom: 20 }}>
                   {renderAI(selected.ai_explanation || selected.raw_description)}
                 </div>
 
