@@ -16,10 +16,10 @@ const ParticleBackground = dynamic(() => import("@/components/ParticleBackground
 interface ScanContext {
   owner: string;
   repo: string;
-  filePath: string;
-  defaultBranch: string;
-  fileSha: string;
-  fullFileContent: string;
+  filePath?: string;
+  defaultBranch?: string;
+  fileSha?: string;
+  fullFileContent?: string;
 }
 
 interface ActionResult {
@@ -129,9 +129,9 @@ export default function Home() {
     owner: string; repo: string; defaultBranch: string;
     combinedCode: string; filenames: string[];
   }) => {
-    // When scanning a whole repo, we don't have a single file context for PRs.
-    // The scan context is set to null to disable block/flag/approve actions that require file paths.
-    setScanCtx(null);
+    // When scanning a whole repo, we keep owner/repo for block/flag actions,
+    // but leave file context empty to hide approve (PR) actions.
+    setScanCtx({ owner: ctx.owner, repo: ctx.repo });
     setScanFilenames(ctx.filenames);
     doScan(ctx.combinedCode, "typescript", ctx.filenames[0]); // Default to TS for syntax highlighting
   };
@@ -153,7 +153,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          owner: scanCtx.owner, repo: scanCtx.repo, filePath: scanCtx.filePath,
+          owner: scanCtx.owner, repo: scanCtx.repo, filePath: finding.file || "unknown",
           finding, policyId: decision(finding.id)?.policyRef || "POL-SEC-001",
         }),
       });
@@ -176,7 +176,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          owner: scanCtx.owner, repo: scanCtx.repo, filePath: scanCtx.filePath,
+          owner: scanCtx.owner, repo: scanCtx.repo, filePath: finding.file || "unknown",
           finding, policyId: decision(finding.id)?.policyRef || "POL-REV-002",
         }),
       });
@@ -286,7 +286,7 @@ export default function Home() {
               >view →</a>
             </>
           ) : (
-            <>GitHub not configured — local block only</>
+            <>blocked by local policy</>
           )}
         </div>
       );
@@ -302,7 +302,7 @@ export default function Home() {
               >view →</a>
             </>
           ) : (
-            <>GitHub not configured — local flag only</>
+            <>flagged by local policy</>
           )}
         </div>
       );
@@ -318,7 +318,7 @@ export default function Home() {
               >view PR →</a>
             </>
           ) : (
-            <>GitHub not configured — local approval only</>
+            <>approved by local policy</>
           )}
         </div>
       );
@@ -394,6 +394,7 @@ export default function Home() {
             const isTriaged = !!actionResults.get(finding.id);
             const triagedAs = actionResults.get(finding.id)?.type;
             const isThis = triagedAs === a;
+            if (a === "approve" && scanCtx && !scanCtx.filePath) return null; // Hide PR request for full repo scans
             return (
               <button
                 key={a}

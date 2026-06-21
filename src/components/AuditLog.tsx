@@ -16,10 +16,10 @@ interface ActionResult {
 interface ScanContext {
   owner: string;
   repo: string;
-  filePath: string;
-  defaultBranch: string;
-  fileSha: string;
-  fullFileContent: string;
+  filePath?: string;
+  defaultBranch?: string;
+  fileSha?: string;
+  fullFileContent?: string;
 }
 
 interface Props {
